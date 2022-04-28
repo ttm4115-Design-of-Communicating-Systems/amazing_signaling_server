@@ -1,0 +1,26 @@
+version: "3.8"
+
+
+services:
+  abs-signaling-server:
+    container_name: abs-signaling-server
+    image: abs-signaling-server:latest
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+
+    ports:
+      - "9999:9999"
+
+    labels:
+      - "traefik.enable=false"
+
+    volumes:
+      - type: volume
+        source: abs_signaling_node_modules
+        target: /server/node_modules
+
+    restart: unless-stopped
+
+volumes:
+  abs_signaling_node_modules:
