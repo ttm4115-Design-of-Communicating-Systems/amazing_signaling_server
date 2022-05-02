@@ -1,6 +1,34 @@
 var Server = require("socket.io").Server;
 const io = new Server(9999, { cors: { origins: ["*"] } });
+const mqtt = require("mqtt");
 var users = {};
+var active_office_user = "";
+const host = "localhost";
+const port = "1883";
+
+const connectUrl = `mqtt://${host}:${port}`;
+
+const client = mqtt.connect(connectUrl, {
+  clean: true,
+  connectTimeout: 4000,
+  reconnectPeriod: 1000,
+});
+
+const topic = "ABS/office/movement";
+client.on("connect", () => {
+  console.log("Connected");
+  client.subscribe([topic], () => {
+    console.log(`Subscribe to topic '${topic}'`);
+  });
+});
+
+client.on("message", (topic, payload) => {
+  let office_id = payload.toString();
+  if (office_id) {
+    active_office_user = office_id;
+    console.log("new active:", active_office_user);
+  }
+});
 
 io.on("connection", (socket) => {
   socket.on("message", (msg) => {
@@ -13,20 +41,16 @@ io.on("connection", (socket) => {
     }
     console.log(data);
 
-    //switching type of the user message
     switch (data.type) {
-      //when a user tries to login
       case "login":
         console.log("User logged:", data.name);
 
-        //if anyone is logged in with this username then refuse
         if (users[data.name]) {
           sendTo(socket, {
             type: "login",
             success: false,
           });
         } else {
-          //save user connection on the server
           users[data.name] = socket;
           socket.name = data.name;
 
@@ -38,17 +62,13 @@ io.on("connection", (socket) => {
 
         break;
 
-      // TODO: pick most recent active office user
       case "offer":
-        //for ex. UserA wants to call UserB
-        console.log("Sending offer to: ", data.name);
+        console.log("Sending offer to: ", active_office_user);
 
-        //if UserB exists then send him offer details
-        var conn = users[data.name];
+        var conn = users[active_office_user];
 
         if (conn != null) {
-          //setting that UserA connected with UserB
-          socket.otherName = data.name;
+          socket.otherName = active_office_user;
 
           sendTo(conn, {
             type: "offer",
@@ -62,7 +82,6 @@ io.on("connection", (socket) => {
       case "answer":
         console.log("Sending answer to: ", data.name);
 
-        //for ex. UserB answers UserA
         var conn = users[data.name];
 
         if (conn != null) {
@@ -70,6 +89,7 @@ io.on("connection", (socket) => {
           sendTo(conn, {
             type: "answer",
             answer: data.answer,
+            name: socket.name,
           });
         }
 
@@ -83,6 +103,19 @@ io.on("connection", (socket) => {
           sendTo(conn, {
             type: "candidate",
             candidate: data.candidate,
+          });
+        }
+
+        break;
+
+      case "leave":
+        console.log("Disconnecting from", data.name);
+        var conn = users[data.name];
+        conn.otherName = null;
+
+        if (conn != null) {
+          sendTo(conn, {
+            type: "leave",
           });
         }
 
