@@ -26,4 +26,4 @@ Change the host and port variables in the server.js file to correct values for y
 docker compose up -d
 ```
 
-This start and expose both a MQTT broker and a signaling server.
+This starts and exposes both a MQTT broker and a signaling server.
